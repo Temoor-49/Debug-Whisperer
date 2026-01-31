@@ -1,0 +1,7 @@
+{
+  "name": "DebugWhisperer",
+  "description": "A friendly coding tutor that translates scary error messages into plain English and provides step-by-step solutions for all skill levels.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
