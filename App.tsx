@@ -78,8 +78,16 @@ const App: React.FC = () => {
   }, []);
 
   const changeTheme = (newTheme: AppTheme) => {
-    setTheme(newTheme);
-    localStorage.setItem('dw_theme', newTheme);
+    // Use the View Transitions API if available
+    if ((document as any).startViewTransition) {
+      (document as any).startViewTransition(() => {
+        setTheme(newTheme);
+        localStorage.setItem('dw_theme', newTheme);
+      });
+    } else {
+      setTheme(newTheme);
+      localStorage.setItem('dw_theme', newTheme);
+    }
   };
 
   const handleSaveProfile = (newProfile: UserProfile) => {
@@ -228,7 +236,16 @@ const App: React.FC = () => {
                 </div>
               </div>
             </div>
-            {solution && <SolutionPanel solution={solution} difficulty={difficulty!} onConfirm={handleFixConfirmed} theme={theme} onReset={() => { setInitialExplanation(null); setSolution(null); }} />}
+            {solution && (
+              <SolutionPanel 
+                initialSolution={solution} 
+                difficulty={difficulty!} 
+                onConfirm={handleFixConfirmed} 
+                theme={theme} 
+                profile={profile}
+                onReset={() => { setInitialExplanation(null); setSolution(null); }} 
+              />
+            )}
           </div>
         )}
         <MemoryPanel memories={memories} theme={theme} onDeleteMemory={handleDeleteMemory} />

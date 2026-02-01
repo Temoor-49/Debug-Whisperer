@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { Difficulty, DebugResponse, UserProfile, PreventionResponse, DetectiveResponse } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
@@ -59,6 +59,85 @@ export const formatCodeSnippet = async (
     }
   });
   return response.text?.trim() || code;
+};
+
+export const elaborateCodeExplanation = async (
+  code: string,
+  language: string,
+  difficulty: Difficulty
+): Promise<string> => {
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `As an expert coding tutor, provide an elaborate, step-by-step breakdown of this ${language} code fix. 
+    Tailor the explanation for a ${difficulty} level developer.
+    Explain the reasoning behind each significant block.
+    Use Markdown with clear bullet points.
+    
+    Code:
+    ${code}`,
+    config: {
+      temperature: 0.7,
+    }
+  });
+  return response.text || "I couldn't generate a detailed breakdown right now.";
+};
+
+export const createSolutionChat = (
+  difficulty: Difficulty,
+  profile?: UserProfile
+): Chat => {
+  const profileContext = profile ? `
+  User Context:
+  - Preferred Language: ${profile.preferredLanguage}
+  - Primary Frameworks: ${profile.frameworks}
+  ` : '';
+
+  return ai.chats.create({
+    model: 'gemini-3-pro-preview',
+    config: {
+      systemInstruction: `You are DebugWhisperer, a friendly coding tutor. 
+      You help people understand error messages and provide step-by-step fixes.
+      Current Difficulty Level: ${difficulty}. 
+      ${profileContext}
+      
+      Always return your response in JSON format matching this schema:
+      {
+        "chatResponse": "string (A friendly conversational message addressing the user's latest query)",
+        "whatWentWrong": "string (A simple summary of the current error context)",
+        "whyItHappened": "string (The root cause explained for the chosen difficulty)",
+        "howToFixIt": "string (The step-by-step instructional steps to fix it. Use Markdown formatting)",
+        "codeSnippet": "string (The code block to fix the error, if applicable)",
+        "codeExplanation": "string (A concise breakdown of what the codeSnippet is doing)",
+        "language": "string (The programming language)",
+        "proTip": "string (Optional helpful insight)",
+        "tags": ["string"] (2-3 short tags)
+      }`,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          chatResponse: { type: Type.STRING },
+          whatWentWrong: { type: Type.STRING },
+          whyItHappened: { type: Type.STRING },
+          howToFixIt: { type: Type.STRING },
+          codeSnippet: { type: Type.STRING },
+          codeExplanation: { type: Type.STRING },
+          language: { type: Type.STRING },
+          proTip: { type: Type.STRING },
+          tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+        },
+        required: ["chatResponse", "whatWentWrong", "whyItHappened", "howToFixIt", "tags"]
+      }
+    }
+  });
+};
+
+export const sendMessageToChat = async (
+  chat: Chat,
+  message: string
+): Promise<DebugResponse> => {
+  const result = await chat.sendMessage({ message });
+  return JSON.parse(result.text || '{}') as DebugResponse;
 };
 
 export const analyzePrevention = async (

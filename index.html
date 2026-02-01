@@ -10,13 +10,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
     <style>
-        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s ease, color 0.3s ease; }
+        body { font-family: 'Inter', sans-serif; }
         .mono-font { font-family: 'JetBrains Mono', monospace; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Theme Transition */
-        * { transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; }
+        /* Silky Smooth Theme Transitions */
+        * { transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), color 0.5s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        /* View Transitions API Customization */
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+          animation-duration: 0.5s;
+          animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        }
 
         /* Multi-Theme Framework */
         .theme-pro { --bg: #fcfcfd; --card: #ffffff; --text: #0f172a; --accent: #4f46e5; --border: #e2e8f0; }

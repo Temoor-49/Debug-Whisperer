@@ -19,6 +19,7 @@ export interface UserProfile {
 }
 
 export interface DebugResponse {
+  chatResponse?: string;
   whatWentWrong: string;
   whyItHappened: string;
   howToFixIt: string;
@@ -27,6 +28,13 @@ export interface DebugResponse {
   language?: string;
   proTip?: string;
   tags?: string[];
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
+  response?: DebugResponse;
+  timestamp: number;
 }
 
 export interface PreventionPrediction {
