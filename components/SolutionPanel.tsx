@@ -68,6 +68,7 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
   const [isEditing, setIsEditing] = useState(false);
   const [isFormatting, setIsFormatting] = useState(false);
   const [previewTab, setPreviewTab] = useState<'code' | 'render'>('code');
+  const [lastSync, setLastSync] = useState<number>(Date.now());
   
   // Elaborate Explanation state
   const [elaboratedExplanation, setElaboratedExplanation] = useState<string | null>(null);
@@ -115,6 +116,26 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
 
   const canRender = detectedLanguage === 'html';
 
+  // Inject common styling for HTML preview to ensure a "World Class" look
+  const htmlPreviewContent = useMemo(() => {
+    if (!canRender) return '';
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+          <style>
+            body { font-family: sans-serif; padding: 20px; transition: all 0.3s ease; }
+          </style>
+        </head>
+        <body>
+          ${editedCode}
+        </body>
+      </html>
+    `;
+  }, [editedCode, canRender]);
+
   useEffect(() => {
     if (!chatInstance.current) {
       chatInstance.current = createSolutionChat(difficulty, profile);
@@ -125,6 +146,7 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
     if (typeof window !== 'undefined' && (window as any).Prism) {
       const timer = setTimeout(() => {
         (window as any).Prism.highlightAll();
+        setLastSync(Date.now());
       }, 0);
       return () => clearTimeout(timer);
     }
@@ -341,85 +363,102 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
                 </div>
               )}
               
-              <div className={`rounded-2xl overflow-hidden border ${isCyber ? 'bg-black border-green-500' : isDark ? 'bg-black border-slate-700' : 'bg-[#1e1e1e] border-slate-200'}`}>
+              <div className={`rounded-2xl overflow-hidden border transition-all duration-300 ${isCyber ? 'bg-black border-green-500' : isDark ? 'bg-black border-slate-700' : 'bg-[#1e1e1e] border-slate-200'}`}>
                 <div className={`px-5 py-3 flex justify-between items-center ${isCyber ? 'bg-green-900/20' : isDark ? 'bg-slate-800' : 'bg-[#252525]'}`}>
                    <div className="flex items-center gap-4">
                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40">
-                       {detectedLanguage} fix {isEditing && '(Editing)'}
+                       {detectedLanguage} fix {isEditing && '(Editing Mode)'}
                      </span>
                      {isEditing && (
-                       <div className="flex items-center gap-2">
+                       <div className="flex items-center gap-1">
                          <button 
                            onClick={() => setPreviewTab('code')}
-                           className={`text-[8px] font-black uppercase tracking-widest transition-all px-2 py-1 rounded ${previewTab === 'code' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/50'}`}
+                           className={`text-[8px] font-black uppercase tracking-widest transition-all px-2.5 py-1 rounded-md ${previewTab === 'code' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/50'}`}
                          >
-                           Code
+                           <i className="fas fa-code mr-1.5"></i> Code
                          </button>
                          {canRender && (
                            <button 
                              onClick={() => setPreviewTab('render')}
-                             className={`text-[8px] font-black uppercase tracking-widest transition-all px-2 py-1 rounded ${previewTab === 'render' ? 'bg-emerald-500/20 text-emerald-400' : 'text-white/30 hover:text-white/50'}`}
+                             className={`text-[8px] font-black uppercase tracking-widest transition-all px-2.5 py-1 rounded-md ${previewTab === 'render' ? 'bg-emerald-500/20 text-emerald-400' : 'text-white/30 hover:text-white/50'}`}
                            >
-                             Render
+                             <i className="fas fa-play mr-1.5"></i> Render
                            </button>
                          )}
                        </div>
                      )}
                    </div>
                    <div className="flex items-center gap-2">
-                     <div className="flex items-center gap-1.5 opacity-20 mr-2">
+                     {isEditing && (
+                        <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5 shadow-inner">
+                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                           <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500/80">Live Sync Active</span>
+                        </div>
+                     )}
+                     <div className="flex items-center gap-1.5 opacity-20 ml-2">
                        <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
                        <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
                      </div>
-                     {isEditing && (
-                        <div className="flex items-center gap-2 bg-black/40 px-2 py-1 rounded-full border border-white/5">
-                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                           <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500/80">Live</span>
-                        </div>
-                     )}
                    </div>
                 </div>
-                <div className={`max-h-96 overflow-auto ${isEditing && previewTab === 'code' ? 'grid md:grid-cols-2 divide-x divide-white/10' : ''}`}>
+                <div className={`max-h-[500px] overflow-auto ${isEditing && previewTab === 'code' ? 'grid md:grid-cols-2 divide-x divide-white/10' : ''}`}>
                   {isEditing ? (
                     <>
                       {previewTab === 'code' ? (
                         <>
-                          <div className="flex flex-col h-full min-h-[300px]">
-                            <div className="bg-white/5 px-4 py-1.5 text-[7px] font-black uppercase tracking-widest text-white/20 border-b border-white/5">Source</div>
+                          <div className="flex flex-col h-full min-h-[400px]">
+                            <div className="bg-white/[0.02] px-4 py-2 text-[8px] font-black uppercase tracking-widest text-white/30 border-b border-white/5 flex items-center justify-between">
+                              <span>Source Editor</span>
+                              <i className="fas fa-pencil text-[7px]"></i>
+                            </div>
                             <textarea 
                               value={editedCode} 
                               onChange={(e) => setEditedCode(e.target.value)} 
                               spellCheck={false} 
-                              className={`w-full h-full p-6 bg-transparent outline-none resize-none mono-font text-[13px] leading-relaxed text-slate-300 flex-1`} 
+                              className={`w-full h-full p-6 bg-transparent outline-none resize-none mono-font text-[13px] leading-relaxed text-slate-300 flex-1 custom-scrollbar`} 
                             />
                           </div>
-                          <div className="flex flex-col h-full bg-[#1a1a1a]">
-                            <div className="bg-white/5 px-4 py-1.5 text-[7px] font-black uppercase tracking-widest text-white/20 border-b border-white/5">Live Preview</div>
-                            <pre className="p-6 m-0 !bg-transparent !text-[13px] leading-relaxed mono-font flex-1 overflow-auto"><code className={`language-${detectedLanguage}`}>{editedCode}</code></pre>
+                          <div className="flex flex-col h-full bg-[#161616]">
+                            <div className="bg-white/[0.02] px-4 py-2 text-[8px] font-black uppercase tracking-widest text-white/30 border-b border-white/5 flex items-center justify-between">
+                              <span>Live Formatted Preview</span>
+                              <span className="text-[7px] opacity-40">Synced: {new Date(lastSync).toLocaleTimeString()}</span>
+                            </div>
+                            <pre className="p-6 m-0 !bg-transparent !text-[13px] leading-relaxed mono-font flex-1 overflow-auto custom-scrollbar">
+                              <code className={`language-${detectedLanguage}`}>{editedCode}</code>
+                            </pre>
                           </div>
                         </>
                       ) : (
-                        <div className="w-full min-h-[300px] bg-white flex flex-col">
-                           <div className="bg-slate-100 px-4 py-2 flex items-center gap-2 border-b border-slate-200">
-                              <div className="flex gap-1.5">
-                                 <div className="w-2 h-2 rounded-full bg-rose-400"></div>
-                                 <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-                                 <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+                        <div className="w-full min-h-[400px] bg-white flex flex-col">
+                           <div className="bg-slate-100 px-4 py-2.5 flex items-center gap-4 border-b border-slate-200">
+                              <div className="flex gap-1.5 shrink-0">
+                                 <div className="w-2.5 h-2.5 rounded-full bg-rose-400"></div>
+                                 <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+                                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
                               </div>
-                              <div className="bg-white border rounded px-3 py-1 text-[9px] text-slate-400 flex-1 truncate">
-                                 localhost:3000/preview
+                              <div className="bg-white border border-slate-200 rounded-md px-3 py-1 text-[9px] text-slate-400 flex-1 truncate font-medium shadow-sm">
+                                 https://whisperer-sandbox.local/preview.html
+                              </div>
+                              <div className="flex items-center gap-2 opacity-30">
+                                <i className="fas fa-rotate-right text-[10px]"></i>
+                                <i className="fas fa-ellipsis-vertical text-[10px]"></i>
                               </div>
                            </div>
                            <iframe 
-                             title="Web Preview" 
-                             srcDoc={editedCode} 
-                             className="w-full flex-1 border-none"
+                             title="Web Render Preview" 
+                             srcDoc={htmlPreviewContent} 
+                             className="w-full flex-1 border-none bg-white"
                            />
                         </div>
                       )}
                     </>
                   ) : (
-                    <pre className="p-6 m-0 !bg-transparent !text-[13px] leading-relaxed mono-font"><code className={`language-${detectedLanguage}`}>{editedCode}</code></pre>
+                    <div className="flex flex-col h-full bg-[#1a1a1a]">
+                       <div className="bg-white/[0.02] px-5 py-2 text-[8px] font-black uppercase tracking-widest text-white/20 border-b border-white/5">ReadOnly Manifest</div>
+                       <pre className="p-8 m-0 !bg-transparent !text-[13px] leading-relaxed mono-font overflow-auto custom-scrollbar">
+                         <code className={`language-${detectedLanguage}`}>{editedCode}</code>
+                       </pre>
+                    </div>
                   )}
                 </div>
               </div>
