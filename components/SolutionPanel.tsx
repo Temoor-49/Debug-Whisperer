@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { DebugResponse, Difficulty, AppTheme, ChatMessage, UserProfile } from '../types';
 import { formatCodeSnippet, createSolutionChat, sendMessageToChat, elaborateCodeExplanation } from '../services/geminiService';
 
@@ -74,6 +74,13 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
   const [elaboratedExplanation, setElaboratedExplanation] = useState<string | null>(null);
   const [isElaborating, setIsElaborating] = useState(false);
   
+  // Undo/Redo State
+  const [history, setHistory] = useState<string[]>([initialSolution.codeSnippet || '']);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const historyRef = useRef<string[]>([initialSolution.codeSnippet || '']);
+  const indexRef = useRef(0);
+  const skipHistoryPush = useRef(false);
+
   // Chat state
   const [solution, setSolution] = useState<DebugResponse>(initialSolution);
   const [editedCode, setEditedCode] = useState(initialSolution.codeSnippet || '');
@@ -84,10 +91,47 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
   const [isSending, setIsSending] = useState(false);
   const chatInstance = useRef<any>(null);
   const scrollAnchor = useRef<HTMLDivElement>(null);
+  // Fix: replace NodeJS.Timeout with any to avoid 'Cannot find namespace NodeJS' in browser-only environments
+  const debounceTimer = useRef<any>(null);
 
   const isDark = theme === AppTheme.DARK || theme === AppTheme.CYBER;
   const isCyber = theme === AppTheme.CYBER;
   const isMono = theme === AppTheme.MONO;
+
+  const pushToHistory = useCallback((content: string) => {
+    if (content === historyRef.current[indexRef.current]) return;
+    
+    const newHistory = historyRef.current.slice(0, indexRef.current + 1);
+    newHistory.push(content);
+    
+    // Limit history size to 50
+    if (newHistory.length > 50) newHistory.shift();
+    
+    historyRef.current = newHistory;
+    indexRef.current = newHistory.length - 1;
+    setHistory([...newHistory]);
+    setHistoryIndex(indexRef.current);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (indexRef.current > 0) {
+      skipHistoryPush.current = true;
+      indexRef.current -= 1;
+      const prevContent = historyRef.current[indexRef.current];
+      setEditedCode(prevContent);
+      setHistoryIndex(indexRef.current);
+    }
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    if (indexRef.current < historyRef.current.length - 1) {
+      skipHistoryPush.current = true;
+      indexRef.current += 1;
+      const nextContent = historyRef.current[indexRef.current];
+      setEditedCode(nextContent);
+      setHistoryIndex(indexRef.current);
+    }
+  }, []);
 
   const languagePatterns: Record<string, RegExp> = {
     python: /def\s+\w+\(|import\s+(os|sys|pandas|numpy|math|json)|print\(|#\s+|if\s+__name__\s*==|elif\s+|lambda\s+\w+:|@[\w\.]+/,
@@ -116,7 +160,6 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
 
   const canRender = detectedLanguage === 'html';
 
-  // Inject common styling for HTML preview to ensure a "World Class" look
   const htmlPreviewContent = useMemo(() => {
     if (!canRender) return '';
     return `
@@ -158,6 +201,32 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
     }
   }, [messages]);
 
+  const handleCodeChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    setEditedCode(newValue);
+    
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    
+    debounceTimer.current = setTimeout(() => {
+      if (!skipHistoryPush.current) {
+        pushToHistory(newValue);
+      }
+      skipHistoryPush.current = false;
+    }, 500);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const isMod = e.ctrlKey || e.metaKey;
+    if (isMod && e.key === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) handleRedo();
+      else handleUndo();
+    } else if (isMod && e.key === 'y') {
+      e.preventDefault();
+      handleRedo();
+    }
+  };
+
   const handleCopyCode = () => {
     if (editedCode) {
       navigator.clipboard.writeText(editedCode);
@@ -172,6 +241,7 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
     try {
       const formatted = await formatCodeSnippet(editedCode, detectedLanguage);
       setEditedCode(formatted);
+      pushToHistory(formatted);
     } catch (err) {
       console.error("Formatting failed:", err);
     } finally {
@@ -213,6 +283,7 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
       setElaboratedExplanation(null);
       if (result.codeSnippet) {
         setEditedCode(result.codeSnippet);
+        pushToHistory(result.codeSnippet);
       }
     } catch (err) {
       console.error("Chat failed:", err);
@@ -388,7 +459,27 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
                        </div>
                      )}
                    </div>
-                   <div className="flex items-center gap-2">
+                   <div className="flex items-center gap-4">
+                     {isEditing && (
+                        <div className="flex items-center gap-1.5 border-r border-white/10 pr-4 mr-2">
+                           <button 
+                             onClick={handleUndo} 
+                             disabled={historyIndex <= 0}
+                             className={`text-[10px] p-1.5 rounded hover:bg-white/10 transition-all ${historyIndex <= 0 ? 'opacity-20 cursor-not-allowed' : 'text-white/60 hover:text-white'}`}
+                             title="Undo (Ctrl+Z)"
+                           >
+                             <i className="fas fa-undo"></i>
+                           </button>
+                           <button 
+                             onClick={handleRedo} 
+                             disabled={historyIndex >= history.length - 1}
+                             className={`text-[10px] p-1.5 rounded hover:bg-white/10 transition-all ${historyIndex >= history.length - 1 ? 'opacity-20 cursor-not-allowed' : 'text-white/60 hover:text-white'}`}
+                             title="Redo (Ctrl+Y)"
+                           >
+                             <i className="fas fa-redo"></i>
+                           </button>
+                        </div>
+                     )}
                      {isEditing && (
                         <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5 shadow-inner">
                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -413,7 +504,8 @@ const SolutionPanel: React.FC<SolutionPanelProps> = ({ initialSolution, difficul
                             </div>
                             <textarea 
                               value={editedCode} 
-                              onChange={(e) => setEditedCode(e.target.value)} 
+                              onChange={handleCodeChange}
+                              onKeyDown={handleKeyDown}
                               spellCheck={false} 
                               className={`w-full h-full p-6 bg-transparent outline-none resize-none mono-font text-[13px] leading-relaxed text-slate-300 flex-1 custom-scrollbar`} 
                             />

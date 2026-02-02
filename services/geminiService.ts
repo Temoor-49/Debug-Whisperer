@@ -2,12 +2,21 @@
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { Difficulty, DebugResponse, UserProfile, PreventionResponse, DetectiveResponse } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+/**
+ * Helper to initialize the GenAI client.
+ * This ensures we're always pulling the latest API Key from the environment
+ * and avoids top-level initialization issues during the build phase.
+ */
+const getAIClient = () => {
+  // Fix: Initialize GoogleGenAI strictly using process.env.API_KEY as per the GenAI coding guidelines
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+};
 
 export const analyzeErrorInitial = async (
   input: { text?: string; imageBase64?: string; mimeType?: string },
   profile?: UserProfile
 ): Promise<string> => {
+  const ai = getAIClient();
   const parts: any[] = [];
   
   const profileContext = profile ? `
@@ -47,6 +56,7 @@ export const formatCodeSnippet = async (
   code: string,
   language: string
 ): Promise<string> => {
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Format the following ${language} code according to industry-standard conventions (e.g., Prettier for JS/TS, PEP8 for Python). 
@@ -66,6 +76,7 @@ export const elaborateCodeExplanation = async (
   language: string,
   difficulty: Difficulty
 ): Promise<string> => {
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `As an expert coding tutor, provide an elaborate, step-by-step breakdown of this ${language} code fix. 
@@ -86,6 +97,7 @@ export const createSolutionChat = (
   difficulty: Difficulty,
   profile?: UserProfile
 ): Chat => {
+  const ai = getAIClient();
   const profileContext = profile ? `
   User Context:
   - Preferred Language: ${profile.preferredLanguage}
@@ -144,6 +156,7 @@ export const analyzePrevention = async (
   code: string,
   profile?: UserProfile
 ): Promise<PreventionResponse> => {
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: `Analyze this code for potential runtime errors or logical failures. 
@@ -186,6 +199,7 @@ export const analyzeDetective = async (
   filesContent: string,
   profile?: UserProfile
 ): Promise<DetectiveResponse> => {
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: `You are DebugWhisperer in DETECTIVE MODE. Analyze the following project files and trace the error chain backwards from manifestation to root cause.
@@ -256,6 +270,7 @@ export const generateSolution = async (
   difficulty: Difficulty,
   profile?: UserProfile
 ): Promise<DebugResponse> => {
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: `Solution for error: ${error}. Initial: ${explanation}. Difficulty: ${difficulty}. 
